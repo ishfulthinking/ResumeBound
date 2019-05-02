@@ -6,8 +6,10 @@
 
 const config = {
   type: Phaser.AUTO,
-  width: 800,
-  height: 600,
+  // We want the game to be 32x16 tiles wide, and each tile is 16px large.
+  width: 32 * 16,
+  height: 16 * 16,
+  zoom: 2,
   parent: "game-container",
   pixelArt: true,
   physics: {
@@ -27,18 +29,16 @@ const game = new Phaser.Game(config);
 let cursors;
 let player;
 let showDebug = false;
+let rate = 5;
+let speed = 90;
 
 function preload() {
-  this.load.image("tiles", "assets/map/roguelikeCity_transparent.png");
+  // We'll use a tileset generated using the program Tiled.
+  this.load.image("tiles", "assets/map/citytileset.png");
   this.load.tilemapTiledJSON("map", "assets/map/tileset.json");
-
-  // An atlas is a way to pack multiple images together into one texture. I'm using it to load all
-  // the player animations (walking left, walking right, etc.) in one image. For more info see:
-  //  https://labs.phaser.io/view.html?src=src/animation/texture%20atlas%20animation.js
-  // If you don't use an atlas, you can do the same thing with a spritesheet, see:
-  //  https://labs.phaser.io/view.html?src=src/animation/single%20sprite%20sheet.js
-  this.load.atlas("atlas", "assets/sprites/ish.png", "assets/sprites/ish_atlas.json");
+  this.load.spritesheet('ish', 'assets/sprites/ish.png', { frameWidth: 16, frameHeight: 26 });
 }
+
 
 function create() {
   const map = this.make.tilemap({ key: "map" });
@@ -64,101 +64,83 @@ function create() {
   // Object layers in Tiled let you embed extra info into a map - like a spawn point or custom
   // collision shapes. In the tmx file, there's an object layer with a point named "Spawn Point"
   const spawnPoint = map.findObject("Objects", obj => obj.name === "Spawn Point");
+  
+  player = this.physics.add.sprite(spawnPoint.x, spawnPoint.y, "ish", "face-down");
 
   // Create a sprite with physics enabled via the physics system. The image used for the sprite has
   // a bit of whitespace, so I'm using setSize & setOffset to control the size of the player's body.
-  player = this.physics.add
-    .sprite(0, 0, "atlas", "ish-front")
-    .setSize(16, 26);
+  
 
   // Watch the player and worldLayer for collisions, for the duration of the scene:
+  player.body.setSize(16, 16).setOffset(0, 10);
   this.physics.add.collider(player, solidLayer);
 
   // Create the player's walking animations from the texture atlas. These are stored in the global
   // animation manager so any sprite can access them.
   const anims = this.anims;
+
   anims.create({
-    key: "ish-left-walk",
-    frames: anims.generateFrameNames("atlas", {
-      prefix: "ish-left-walk.",
-      start: 0,
-      end: 3,
-      zeroPad: 3
-    }),
-    frameRate: 10,
+    key: 'down',
+    frames: this.anims.generateFrameNumbers('ish', { start: 0, end: 3 }),
+    frameRate: rate,
     repeat: -1
   });
   anims.create({
-    key: "ish-right-walk",
-    frames: anims.generateFrameNames("atlas", {
-      prefix: "ish-right-walk.",
-      start: 0,
-      end: 3,
-      zeroPad: 3
-    }),
-    frameRate: 10,
+    key: 'left',
+    frames: this.anims.generateFrameNumbers('ish', { start: 4, end: 7 }),
+    frameRate: rate,
     repeat: -1
   });
   anims.create({
-    key: "ish-front-walk",
-    frames: anims.generateFrameNames("atlas", {
-      prefix: "ish-front-walk.",
-      start: 0,
-      end: 3,
-      zeroPad: 3
-    }),
-    frameRate: 10,
+    key: 'right',
+    frames: this.anims.generateFrameNumbers('ish', { start: 8, end: 11 }),
+    frameRate: rate,
     repeat: -1
   });
   anims.create({
-    key: "ish-back-walk",
-    frames: anims.generateFrameNames("atlas", {
-      prefix: "ish-back-walk.",
-      start: 0,
-      end: 3,
-      zeroPad: 3
-    }),
-    frameRate: 10,
+    key: 'up',
+    frames: this.anims.generateFrameNumbers('ish', { start: 12, end: 15 }),
+    frameRate: rate,
     repeat: -1
+  });
+
+  // Make animations for standing still, too.
+  this.anims.create({
+    key: 'face-down',
+    frames: [ { key: 'ish', frame: 1 } ],
+    frameRate: 20
+  });
+  this.anims.create({
+    key: 'face-left',
+    frames: [ { key: 'ish', frame: 5 } ],
+    frameRate: 20
+  });
+  this.anims.create({
+    key: 'face-right',
+    frames: [ { key: 'ish', frame: 9 } ],
+    frameRate: 20
+  });
+  this.anims.create({
+    key: 'face-up',
+    frames: [ { key: 'ish', frame: 13 } ],
+    frameRate: 20
+  });
+  this.anims.create({
+    key: 'yahoo',
+    frames: [ { key: 'ish', frame: 16 } ],
+    frameRate: 20
   });
 
   const camera = this.cameras.main;
   camera.startFollow(player);
-  camera.setBounds(0, 0, 16 * 32, 16 * 16);
+  camera.setBounds(0, 0, 224*16, 16*16);
 
   cursors = this.input.keyboard.createCursorKeys();
-
-  // Help text that has a "fixed" position on the screen
-  this.add
-    .text(16, 16, 'Arrow keys to move\nPress "D" to show hitboxes', {
-      font: "18px monospace",
-      fill: "#000000",
-      padding: { x: 20, y: 10 },
-      backgroundColor: "#ffffff"
-    })
-    .setScrollFactor(0)
-    .setDepth(30);
-
-  // Debug graphics
-  this.input.keyboard.once("keydown_D", event => {
-    // Turn on physics debugging to show player's hitbox
-    this.physics.world.createDebugGraphic();
-
-    // Create worldLayer collision graphic above the player, but below the help text
-    const graphics = this.add
-      .graphics()
-      .setAlpha(0.75)
-      .setDepth(20);
-    solidLayer.renderDebug(graphics, {
-      tileColor: null, // Color of non-colliding tiles
-      collidingTileColor: new Phaser.Display.Color(243, 134, 48, 255), // Color of colliding tiles
-      faceColor: new Phaser.Display.Color(40, 39, 37, 255) // Color of colliding face edges
-    });
-  });
 }
 
+
+
 function update(time, delta) {
-  const speed = 175;
   const prevVelocity = player.body.velocity.clone();
 
   // Stop any previous movement from the last frame
@@ -183,20 +165,41 @@ function update(time, delta) {
 
   // Update the animation last and give left/right animations precedence over up/down animations
   if (cursors.left.isDown) {
-    player.anims.play("ish-left-walk", true);
+    player.anims.play("left", true);
   } else if (cursors.right.isDown) {
-    player.anims.play("ish-right-walk", true);
+    player.anims.play("right", true);
   } else if (cursors.up.isDown) {
-    player.anims.play("ish-back-walk", true);
+    player.anims.play("up", true);
   } else if (cursors.down.isDown) {
-    player.anims.play("ish-front-walk", true);
+    player.anims.play("down", true);
   } else {
     player.anims.stop();
 
-    // If we were moving, pick and idle frame to use
-    if (prevVelocity.x < 0) player.setTexture("atlas", "ish-left");
-    else if (prevVelocity.x > 0) player.setTexture("atlas", "ish-right");
-    else if (prevVelocity.y < 0) player.setTexture("atlas", "ish-back");
-    else if (prevVelocity.y > 0) player.setTexture("atlas", "ish-front");
+    // If we were moving, pick an idle frame to use
+    if (prevVelocity.x < 0) player.anims.play("face-left", true);
+    else if (prevVelocity.x > 0) player.anims.play("face-right", true);
+    else if (prevVelocity.y < 0) player.anims.play("face-up", true);
+    else if (prevVelocity.y > 0) player.anims.play("face-down", true);
   }
+}
+
+function powerUp(type) {
+  if (type === "coffee") {
+    speed += 50;
+    rate += 3;
+    popUp("+10 energy");
+  }
+  else if (type === "food") {
+    popUp("-10 hunger");
+  }
+  else if (type === "education") {
+    popUp("+100 intelligence");
+  }
+  else if (type === "akamai") {
+    popUp("+1 work opportunity");
+  }
+}
+
+function popUp(message) {
+  // TODO: Figure out how to add pop-up text boxes
 }
