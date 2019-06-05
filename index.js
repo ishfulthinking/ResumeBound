@@ -1,8 +1,10 @@
-/**
- * Author: Michael Hadley, mikewesthad.com
- * Asset Credits:
- *  - Tuxemon, https://github.com/Tuxemon/Tuxemon
- */
+/*
+  This is an interactive resume by Ishmael Perez for ScholarJet and Akamai's
+  "Code Your Resume" contest. I hope you enjoy!
+
+  BIG shout out to Michael Hadley (mikewesthad.com) for his great guide on
+  using Phaser 3 to make a Pokemon-like HTML5 game like this.
+*/
 
 const config = {
   type: Phaser.AUTO,
@@ -31,20 +33,22 @@ let player;
 let showDebug = false;
 let rate = 5;
 let speed = 90;
+let logo;
+let popUpMessage;
+
+let coffeeFlag = false;
 
 function preload() {
   // We'll use a tileset generated using the program Tiled.
   this.load.image("tiles", "assets/map/citytileset.png");
   this.load.tilemapTiledJSON("map", "assets/map/tileset.json");
   this.load.spritesheet('ish', 'assets/sprites/ish.png', { frameWidth: 16, frameHeight: 26 });
+  // TODO: Make a splash image: this.load.image("logo", "assets/sprites/resumebound.png");
 }
 
 
 function create() {
   const map = this.make.tilemap({ key: "map" });
-
-  // Parameters are the name you gave the tileset in Tiled and then the key of the tileset image in
-  // Phaser's cache (i.e. the name you used in preload)
   const tileset = map.addTilesetImage("city", "tiles");
 
   // Parameters: layer name (or index) from Tiled, tileset, x, y
@@ -54,29 +58,23 @@ function create() {
   const belowLayer = map.createStaticLayer("Below player", tileset, 0, 0);
   const aboveLayer = map.createStaticLayer("Above player", tileset, 0, 0);
 
+  // Only one layer actually collides with the player.
   solidLayer.setCollisionByProperty({ collides: true });
-
-  // By default, everything gets depth sorted on the screen in the order we created things. Here, we
-  // want the "Above Player" layer to sit on top of the player, so we explicitly give it a depth.
-  // Higher depths will sit on top of lower depth objects.
+  // And only one other layer will appear "above" the player.
   aboveLayer.setDepth(10);
 
-  // Object layers in Tiled let you embed extra info into a map - like a spawn point or custom
-  // collision shapes. In the tmx file, there's an object layer with a point named "Spawn Point"
+  // Make the player spawn in the spawn point by getting the info from the Tiled file's Objects layer.
   const spawnPoint = map.findObject("Objects", obj => obj.name === "Spawn Point");
-  
-  player = this.physics.add.sprite(spawnPoint.x, spawnPoint.y, "ish", "face-down");
+  player = this.physics.add.sprite(spawnPoint.x, spawnPoint.y, "ish", "face-up");
 
-  // Create a sprite with physics enabled via the physics system. The image used for the sprite has
-  // a bit of whitespace, so I'm using setSize & setOffset to control the size of the player's body.
-  
+  // Show the ResumeBound logo.
+  logo = this.physics.add.sprite(0, 0, "")
 
-  // Watch the player and worldLayer for collisions, for the duration of the scene:
+  // Set a 16x16 collision box 10 pixels below the top-left of the player.
   player.body.setSize(16, 16).setOffset(0, 10);
   this.physics.add.collider(player, solidLayer);
 
-  // Create the player's walking animations from the texture atlas. These are stored in the global
-  // animation manager so any sprite can access them.
+  // Create the walking animations.
   const anims = this.anims;
 
   anims.create({
@@ -107,7 +105,7 @@ function create() {
   // Make animations for standing still, too.
   this.anims.create({
     key: 'face-down',
-    frames: [ { key: 'ish', frame: 1 } ],
+    frames: [ { key: 'ish', frame: 0 } ],
     frameRate: 20
   });
   this.anims.create({
@@ -131,11 +129,16 @@ function create() {
     frameRate: 20
   });
 
+  // Make the camera follow along with the player as they walk, and sets its bounds to the map.
+  // That way we don't have "the void" show up -- the camera just scrolls along horizontally.
   const camera = this.cameras.main;
   camera.startFollow(player);
   camera.setBounds(0, 0, 224*16, 16*16);
 
+  // Enable player input.
   cursors = this.input.keyboard.createCursorKeys();
+
+  // TODO: Add event flags: coffee, hot dog, CAS, Siemens, portfolio bridge, Cambridge, languages, and Akamai.
 }
 
 
@@ -146,42 +149,49 @@ function update(time, delta) {
   // Stop any previous movement from the last frame
   player.body.setVelocity(0);
 
-  // Horizontal movement
+  // Movement based on the arrow keys.
   if (cursors.left.isDown) {
     player.body.setVelocityX(-speed);
   } else if (cursors.right.isDown) {
     player.body.setVelocityX(speed);
   }
-
-  // Vertical movement
   if (cursors.up.isDown) {
     player.body.setVelocityY(-speed);
   } else if (cursors.down.isDown) {
     player.body.setVelocityY(speed);
   }
-
-  // Normalize and scale the velocity so that player can't move faster along a diagonal
+  // Normalize and scale the velocity so that player doesn't move faster along a diagonal.
   player.body.velocity.normalize().scale(speed);
 
   // Update the animation last and give left/right animations precedence over up/down animations
-  if (cursors.left.isDown) {
+  if (cursors.left.isDown)
     player.anims.play("left", true);
-  } else if (cursors.right.isDown) {
+  else if (cursors.right.isDown)
     player.anims.play("right", true);
-  } else if (cursors.up.isDown) {
+  else if (cursors.up.isDown)
     player.anims.play("up", true);
-  } else if (cursors.down.isDown) {
+  else if (cursors.down.isDown)
     player.anims.play("down", true);
-  } else {
+  else {
     player.anims.stop();
 
     // If we were moving, pick an idle frame to use
-    if (prevVelocity.x < 0) player.anims.play("face-left", true);
-    else if (prevVelocity.x > 0) player.anims.play("face-right", true);
-    else if (prevVelocity.y < 0) player.anims.play("face-up", true);
-    else if (prevVelocity.y > 0) player.anims.play("face-down", true);
+    if (prevVelocity.x < 0) 
+      player.anims.play("face-left", true);
+    else if (prevVelocity.x > 0) 
+      player.anims.play("face-right", true);
+    else if (prevVelocity.y < 0)
+      player.anims.play("face-up", true);
+    else if (prevVelocity.y > 0)
+      player.anims.play("face-down", true);
   }
 }
+
+function popUp(instance, message) {
+  // TODO: Put pop-up speech bubbles whenever x is between two values
+  // so that the on-screen info can be explained in detail.
+}
+
 
 function powerUp(type) {
   if (type === "coffee") {
@@ -200,6 +210,24 @@ function powerUp(type) {
   }
 }
 
-function popUp(message) {
-  // TODO: Figure out how to add pop-up text boxes
+
+
+function drink(player, drink) {
+  drink.kill();
+  powerUp("coffee");
 }
+/*
+function confetti() {
+  let emitter = game.add.emitter( this.home_location.x + ( this.width / 2 ), this.home_location.y, 100 );
+  emitter.makeParticles( 'confetti', [ 0, 1, 2, 3 ] );
+  emitter.y = emitter.y + ( this.tile_size * 2 );
+  emitter.width = this.home_location.width - this.tile_size;
+  emitter.height = this.tile_size;
+  emitter.setYSpeed( 20, 40 );
+  emitter.setXSpeed( 0, 0 );
+  emitter.gravity = 0;
+  this.groupElements.add( emitter );
+
+  emitter.start( false, 1500, 70 );
+}
+*/
